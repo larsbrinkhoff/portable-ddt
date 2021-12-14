@@ -1,0 +1,16 @@
+case $n in
+0:	echo Needs two args; exit ;;
+1:	echo Needs two args; exit ;;
+3:	echo Needs two args; exit
+esac
+cc -S -O -DPDP11 -DDDTLM $1.c
+echo '1,$s/csv/ddtcsv/
+1,$s/cret/ddtcret/
+w
+q
+' | ed $1.s
+cc -c $1.s
+mv $1.o $1.oo
+nobss -l $1.oo $1.o
+ar r ../dobj/$2'lib.a' $1.o
+rm $1.s $1.oo $1.o

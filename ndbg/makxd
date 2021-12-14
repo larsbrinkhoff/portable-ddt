@@ -1,0 +1,13 @@
+set cpu=03
+set tst=nd
+ld -o $cpu$tst'.bin' -u ddthc \
+    ../../mos/obj/hdr.o ../../mos/$cpu/mos.o \
+    ../dobj/mostbl-1.o ../../mos/$cpu/mosdev.a \
+    ../dobj/11ddt.o ../dobj/mosddt.o ../dobj/dlib.a \
+    ../../aux/$cpu/aux.a ../../aux/obj/aux.a \
+    ../../mos/obj/mosend-1.o \
+    ../dobj/11lm.o  ../../aux/obj/ddtst.o
+ddtsym -b '$BEGIN' $cpu$tst'.bin' $cpu$tst
+ldlda $cpu$tst $cpu$tst'.lda' -b 1000
+rm $cpu$tst
+cp 03nd.lda /tmp/nd
