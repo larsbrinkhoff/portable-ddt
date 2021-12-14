@@ -1,3 +1,16 @@
+# Portable DDT, and friends
+
+This is a collection of portable, or implemented partly in C,
+implementations of DDT.  They all originate from MIT.
+
+- `ddt.68` is David Bridgham's Portable DDT for VAX.
+- `ndgb` is Portable DDT, including a PDP-11 version.
+- `nu-ddt` is DDT for the NuMachine; it's not portable but partly in C.
+
+---
+
+### About portable DDT
+
 The variants can be viewed as a matrix. Along one side was the
 architecture: it first ran on the PDP-11, and was later moved to (that
 I know of) the MC68000, the VAX (from DAB's work), the Intel x86 (I
