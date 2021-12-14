@@ -1,0 +1,6 @@
+/* This file is catted to the begining when all the files are
+ * catted together.
+ */
+
+#define	DDTNIN		/* make things internal */
+#define	DDTCAT		/* so the headers files don't get included again */

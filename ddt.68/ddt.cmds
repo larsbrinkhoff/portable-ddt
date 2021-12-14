@@ -1,0 +1,85 @@
+			DDT COMMAND LIST
+  
+	   n/     Open loc n, type contents in current mode
+	   /      Retype loc pointed to by last address
+	   n<CR>  Modify currently opened loc to be n, close loc
+	   <CR>   Reset modes, go to command level
+	   n<LF>  Modify, close, open next loc
+	   <LF>   Advance to next item and display
+	   n^     Modify, close, open previous loc
+	   ^      Reverse to previous item
+	   n<TAB> Modify, close, open loc pointed to by last typed value
+	   <TAB>  Open loc pointed to by last typed value
+	   @	  Synonym for <TAB>
+	   n]     Open location n, type as instr
+	   ]      Set temporary mode to instr, retype location
+	   n{     Open location n, type as a numeric
+	   {      Set temporary mode to numeric, retype location
+	   n[     Open location n, type as symbolic
+	   [      Set temporary mode to symbolic, retype location
+	   n!	  Open location n, don't type
+	   n=     Type value as numeric
+	   =      Retype value as numeric
+	   n\     Examine display block at n
+	   \      Examine display block pointed to by last address
+
+	    $A    Addresses will be typed as absolute numbers
+	    $R    Addresses will be typed relative to symbols
+	    $I    Change current mode to instruction type out
+	    $N    Change current mode to numeric type out
+	    $S    Change current mode to symbolic type out
+	    $T    Change current mode to ASCII text output
+	    $Z    Change current mode/length to .ASCIZ
+	    $H    Change to halfword (byte) mode
+	    $W    Change to (short)word mode
+	    $L    Change to longword mode
+	    $mI   Change current input radix to m
+	    $mO   Change current output radix to m
+	    $mR   Change input and output radix
+	    $mD   Change current display block size
+		  Note that the initial modes are $S and $W.  These
+		  can be temporarily changed by the above commands and
+		  will return to the permanent setting by a carriage
+		  return.  The settings can be permanently changed by
+		  using two altmodes in the mode setting command
+		  (e.g. $$T sets permanent ASCII mode)
+
+	    $mS   Change maximum symbol offset
+		  This mode is 'permanent' i.e. once set, it
+		  stays at that value.
+	
+	    n$iM  Set machine dependant mode i to n.
+		  The actual argument syntax may vary from machine to
+		  machine.
+
+	    n$iB  Set breakpoint i at address n (i from 0 to 7 or can
+	          be omitted)
+	    $iB   Remove breakpoint i
+	    $B    Remove all breakpoints
+	    $V    List (view) all breakpoints
+		  Note that breakpoints should only be set at the start
+		  of extended instructions. Setting a breakpoint in the
+		  middle of an instruction will cause undefined randomness.
+	
+*	    $P    Proceed from breakpoint
+*	    m$P   Proceed from breakpoint m times (without halting)
+*	    ^P    Single step the processor
+*	    n^P   Single step n times (without halting)
+*	    ^X    'Execute' step the processor - treats JSR as an atomic
+*	    n^X   Execute step n times (without halting)
+*	    $G    Start execution at address in JOBSA (start of program)
+*	    n$G   Start executing program at location n.
+
+
+Commands marked with a '*' can be executed only in the hard-core
+debugger with the normal code halted.
+
+Numbers 'm' may be typed either before or after the '$'; numbers 'n'
+or 'i' must be typed where shown.
+
+Where a value is called for, if the value is typed before the
+'$' (if any), the value may be typed as a string of tokens, which may
+be either numbers or known symbols (i.e. findable in the DDT symbol
+table) separated by operators; the available operators are +, - and *.
+If the value is typed after the '$' only a single number may be used;
+these are read in decimal unless preceeded by a 0.

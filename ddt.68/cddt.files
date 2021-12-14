@@ -1,0 +1,137 @@
+ddt.cmds
+	A list of all the commands supported by DDT. Some commands
+	are only available in 'hardcore' mode; see below for this.
+
+ddt.h
+parse.c
+val.c
+cmd.c
+ops.c
+util.c
+	These files represent the core of the machine independant
+	CDDT. They implement the general DDT parser (first 2 files)
+	as well as most commands, etc. There is a general value
+	package for storing values typed as part of DDT commands;
+	see ddt.cmds for what this looks like. (Note that you could
+	simulate the existing multi-value syntax by making '<' and
+	'>' synonyms (in the parser) for ','.)
+mosddt.c
+bpt.c
+hc.c
+hcddt.c
+	These are the files that implement the 'hard code' debugger.
+	Let me explain this. The debugger is designed so that the
+	there can be multiple instantions of the parser; each instantiation
+	has what is called a 'DDT state block', which includes the
+	stateof the parser, the value stack, the current modes, etc,
+	and pointers to routines to call to read and print characters.
+	It is possible to call DDT from inside a process, provided
+	that the correct character access routines are specified in a
+	state block. mosddt.c is an example of such a state block;
+	it runs as a MOS process and enable you access to almost
+	the copmlete capabilities of the debugger while the system
+	is running. The debugger also has some operations that are
+	only useful if it is running as a 'hardcore' debugger,
+	i.e. in control of the machine. Such operations are single
+	and 'execute' step, etc. The machine independant portion
+	of these commands is here, as well as the DDT state block
+	for this mode (in hcddt.c). There is also some machine
+	language support code to save and restore the state of
+	the machine, catch traps, etc. See the machine dependant
+	files below.
+
+pdefs.h
+	A file of random short definitions.
+ptypes.h
+	A file containing machine independant type definitions. We find
+	that using these makes C code very portable; all type
+	declaration in this system include both a type and length.
+	See the types file for more details on how it works. Note that
+	the 't' type is a crock; I put it in when I was trying to save
+	space on the 11 but I think it's a waste. The files that
+	go with it (more when we add more CPU types) are:
+11types.h
+68types.h
+
+mdep.h
+	A file containing type definitions and paramters used by DDT. Goes
+	with following files:
+11mdep.h
+68mdep.h
+
+11mdep.c
+11inslst.mac
+11inslst.ok
+68mdep.c
+	These routine implement things that are dependant on the machine,
+	but not in the operating mode (see below). Examples are such things
+	as instruction decoding, and checking whether the instruction
+	about to be executed is a subroutine call or system call (for
+	'execute step').
+
+optyp.h
+	This is a file that is a first step in the direction of having
+	the debugger run in several modes. At the moment it runs in the
+	bare target machine: the 'lm' stands for local machine. (Note there
+	are two types, one for each CPU). Two other obvious ones are
+	having it run in a different machine as a front end to a
+	cross network debugger; the other possibility is having it run
+	under an operating system, e.g. UNIX as a replacement for 'adb'.
+	The following files help with that.
+11lm.h
+11lm.c
+11lm.mac
+11lm.sml
+csv.s
+cco
+	These files are the PDP11 version of the 'local machine' support;
+	the first contains only information on how to read data from the
+	terminal; the next contains operations that are dependant on the
+	mode of operation (such as fetching and storing data, which in
+	a cross network version might contain code to run XNET or
+	something). The next one contains machine language support
+	for running on the local machine. (Note that because of the
+	way the symbol table works, with symbols for things like
+	registers that are only available when the machine is stopped
+	immediately prepended to the rest of the symbol table, and
+	because the PDP11 symbol table must be the last thing in the
+	file, this file must be linked in last in load modules.)
+	The final ones contains a copy of the C subroutine call/return
+	code with different names, and a shell file to convert the
+	output code from the PDP11 compiler to use it (so that breakpoints
+	can be set in the normal copy to aid in debugging C code).
+
+68lm.h
+68lm.c
+68hc.s
+	These are the 68K versions of the files above. 68hc.s should
+	more properly be named 68lm.s; Dave Bridgham probably did not
+	understand the naming convention (or perhaps he had a conflict
+	with the .o files from the two files).
+
+rdxst.c
+isymt.c
+symt.c
+	These files (which are sort of machine dependant) implement
+	the symbol table. Both are useful only for cases in which
+	the debugger is linked in with the target. If you wanted
+	to write a remote debugger these routines would
+	have to be changed to read a symbol table from the file
+	on startup. The first one is used by the PDP11, and the second
+	two by the 68K
+
+makddt
+11makddt
+	These files are used for making operational versions of DDT.
+	It can be compiled on modules for ease of debugging, but
+	once you are running it it is better to compile all of it
+	together, which enables you to turn off the global names
+	of all the internal routines. The first file puts together
+	the machine independant pieces, and the second adds the
+	PDP11 specific ones.
+
+Makefile
+cat_defs
+errs
+	These files are used by Dave Bridgham to put together the 68K
+	version.
