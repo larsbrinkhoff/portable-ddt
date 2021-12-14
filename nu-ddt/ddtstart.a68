@@ -1,0 +1,134 @@
+; ddtstart.a68
+;
+; EMACS_MODES: !c !fill
+;
+; Assembly language assist and startup for MC68000 DDT.  Get a
+; stack, initialize memory management, vectors, and I/O, then
+; go to main routine.  Also contains trap handling routines and
+; return to interrupted program.
+;
+
+
+SSR	=	16 * 4		; offset of saved SR
+SPC	=	17 * 4		; offset of saved PC from start of save area
+
+
+NXMVEC	=	2 * 4		; nonexistent memory vector
+ODDVEC	=	3 * 4		; odd address vector
+ILLVEC	=	4 * 4		; illegal instr. vector
+UN1VEC	=	10 * 4		; unimplemented instr. 1 vector
+UN2VEC	=	11 * 4		; unimplemented instr. 2 vector
+BPTVEC	=	47 * 4		; breakpoint trap vector
+TRCVEC	=	9 * 4		; trace trap vector
+MAXVEC	=	255		; 255 vectors maximum
+
+
+	.globl	DDT, ddtstack, mmgt, ddt68, regsave, bkptrap,trctrap
+	.globl	nxmtrap, illtrap, badtrap, IO_Init, rtn
+
+DDT:				; Main DDT entry point
+	movl	#ddtstack,sp	; get our own stack
+	movw	#0x2700,sr	; disable interrupts, supervisor mode
+	jsr	mmgt		; turn on memory mapping
+	jsr	inivec		; init. interrupt vectors
+	jsr	IO_Init		; init. UNIX PCI (temp)
+	movl	a0,sp@-
+	movl	a0,sp@-
+	jsr	ddt68		; goto debugger
+	bra	DDT		; should never return
+
+; Breakpoint Trap handler
+
+bkpt_trap:
+	movw	#0x2700,sr	; disable interrupts
+	moveml	#0xFFFF,regsave ; save all registers
+	movw	sp@,regsave+SSR+2 ; copy SR to save structure
+	clrw	regsave+SSR
+	movl	sp@(2),regsave+SPC ; and PC also
+	movl	#ddtstack,sp	; get our own stack
+	jsr	bkptrap		; go process trap
+	bra	rtn		; shouldn't ever return
+
+
+; Trace Trap handler
+
+trc_trap:
+	movw	#0x2700,sr	; disable interrupts
+	moveml	#0xFFFF,regsave	; save all registers
+	movw	sp@,regsave+SSR+2 ; copy SR to save structure
+	clrw	regsave+SSR
+	movl	sp@(2),regsave+SPC ; and PC also
+	movl	#ddtstack,sp	; get our own stack
+	jsr	trctrap		; go process trap
+	bra	rtn		; shouldn't ever return
+
+
+; Unexpected Trap/Interrupt handler
+
+bad_trap:
+	movw	#0x2700,sr	; disable interrupts
+	moveml	#0xFFFF,regsave	; save all registers
+	movw	sp@,regsave+SSR+2 ; copy SR to save structure
+	clrw	regsave+SSR
+	movl	sp@(2),regsave+SPC ; and PC also
+	movl	#ddtstack,sp	; get our own stack
+	jsr	badtrap		; go process trap
+	bra	rtn		; shouldn't ever return
+
+
+; Bus Error (NXM) and Odd Address Trap handler
+
+nxm_trap:
+	movw	#0x2700,sr	; disable interrupts
+	moveml	#0xFFFF,regsave	; save all registers
+	movw	sp@(0x8),regsave+SSR+2 ; copy SR to save structure
+	clrw	regsave+SSR
+	movl	sp@(0xA),regsave+SPC ; and PC also
+	movl	sp,a0		; set up args for pass to c routine
+	movl	#ddtstack,sp	; get our own stack
+	movl	a0@(2),sp@-	; push access address onto stack
+	jsr	nxmtrap		; go process trap
+	bra	rtn		; shouldn't ever return
+
+
+; Illegal Instruction trap
+
+ill_trap:
+	movw	#0x2700,sr	; disable interrupts
+	moveml	#0xFFFF,regsave	; save all registers
+	movw	sp@,regsave+SSR+2 ; copy SR to save structure
+	clrw	regsave+SSR
+	movl	sp@(2),regsave+SPC ; and PC also
+	movl	#ddtstack,sp	; get our own stack
+	jsr	illtrap		; go process trap
+	bra	rtn		; shouldn't ever return
+
+
+; Return to Interrupted Program
+rtn:
+	moveml	regsave,#0xFFFF ; restore user's registers
+	movw	regsave+SSR+2,sp@ ; and sr
+	movl	regsave+SPC,sp@(2) ; and pc
+	rte			; go back to user's program
+
+; Initialize interrupt vectors
+
+inivec:
+	subl	a0,a0		; no !@#$%^* clearing of address registers!
+	movl	#bad_trap,d0
+	movl	#MAXVEC,d1
+loop:	movl	d0,a0@+		; put it out there
+	subql	#1,d1
+	bge	loop
+	movl	#nxm_trap,NXMVEC ; set nxm trap vector
+	movl	#nxm_trap,ODDVEC ; set odd addr. trap vector
+	movl	#ill_trap,ILLVEC ; set illegal instr. trap vector
+	movl	#ill_trap,UN1VEC ; set unimpl. instr. trap vector
+	movl	#ill_trap,UN2VEC ; set unimpl. instr. trap vector
+	movl	#bkpt_trap,BPTVEC ; set up breakpoint trap vector
+	movl	#trc_trap,TRCVEC ; and trace trap vector
+	rts
+
+.data
+	. = .+4096
+ddtstack:

@@ -1,0 +1,6 @@
+	.text
+baz:	.long
+foo:
+	lea	pc@(bar-.-2),a0
+bar:	.long
+

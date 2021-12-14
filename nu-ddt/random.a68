@@ -1,0 +1,42 @@
+; short random (seed, value)
+; short	*seed, *value;
+;
+; This is a C-callable routine to compute a psuedo-random number sequence
+; based on a supplied seed.  It uses a linear congruential algorithm (see
+; Knuth Vol. 2), of the form
+;	X(n+1) = [aX(n) + c] mod m
+; where:
+;	a = 261
+;	c = 13849
+;	m = 65535
+; The result X(n) is returned as the value of seed; this value *must* be used
+; as the seed to the next call of random.  However, it is a feature of the
+; linear congruential algorithm that it generates values with cycles in the
+; last six bits.  Thus the calculation of [aX(n) + c] is performed to 32-bit
+; precision; and the result shifted right six bits, taken mod m, and returned
+; as value.  Thus value should be used as the actual random number generated.
+;
+; Arguments:
+;	short *seed	(= a6@8 )	pointer to X(n); seed for generator
+;
+; Returns:
+;	short *seed	(= a6@8 )	pointer to X(n+1); updated seed
+;	short *value	(= a6@12 )	pointer to returned random number
+;
+
+	.globl	random
+;
+seed	=	8
+value	=	12
+random:
+	link	a6,#0		; set up a stack frame
+	movl	a6@(seed),a1	; get addr. of seed
+	movl	a6@(value),a0	; and addr. of value
+	movw	a1@,d0		; compute (261 * X(n))
+	mulu	#261,d0		; now d0 = (261 * X(n))
+	addl	#13849,d0	; now add  c
+	movw	d0,a1@		; take result mod m to get new seed
+	asrl	#6,d0		; shift right six bits to break up cycle
+	movw	d0,a0@		; and return result mod m as random number
+	unlk	a6		; deallocate frame
+	rts

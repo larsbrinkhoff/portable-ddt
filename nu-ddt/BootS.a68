@@ -1,0 +1,277 @@
+| BootS.a68
+|
+| Larry Allen, MIT-LCS-CSC, 10/21/81
+|
+| EMACS_MODES:	!c !fill
+|
+| Second-stage bootstrap program for Nu terminal UNIX.  Should reside
+| in slot 0 of the disk, and be read into memory (at E0000) by the
+| ROM bootstrap.
+|
+| First, the BootS program copies itself to the top of physical memory,
+| to get itself out of the way of the program being booted.  Next,
+| it prompts for a filename to be booted; the filename is interpreted as
+| a normal UNIX pathname on the disk this program was read from.  That
+| file is then read into memory at E0000.  As the last step, the mapping
+| registers are set up so that the virtual memory transfer address
+| specifed in the b.out file header maps to physical memory address E0000
+| (ie. the base of the program in physical memory); then execution is
+| started at the transfer address specified in the b.out file header.
+|
+| The mapping hack is there to allow the UNIX kernel to begin at a
+| virtual address lower than E0000.  This is necessary because the
+| maximum physical address that can be referenced by a small process
+| is 100000, leaving only 128K bytes for the UNIX kernel, which is
+| not enough.
+|
+|
+
+| Programming Conventions
+|
+| The principle convention that this code must follow is that it
+| must be position-independent.  This is necessary because the
+| program must copy itself to the top of memory before booting
+| in the operating system.  Basically, this means that the
+| program must make absolute references to absolute locations
+| (eg. I/O device registers) and pc-relative references to
+| program locations (eg. branch addresses and global variables).
+|
+| The program uses the console terminal I/O routines contained
+| in the bootstrap ROM.  Thus, it must follow the calling
+| conventions used in the boot ROM when calling these routines.
+| To call one of these routines, the following code is used:
+|	lea	pc@(6),a6	|save return address
+|	jmp	routine		|call the routine
+| Also, the console I/O routines depend on the contents of
+| register d7; thus, this program MUST NOT ALTER d7 UNDER
+| ANY CIRCUMSTANCES.  Finally, the console I/O routines
+| may destroy register a4; it must be preserved before the
+| call if needed.
+|
+| This program is intended to be entered and run with the
+| processor in supervisor mode, with interrupts disabled
+| (priority = 7), and mapping turned off.  This is the
+| processor state left by the boot ROM when the program
+| is entered.
+|
+| The register usage conventions are as follows:
+|	a0,a1,d0,d1	Scratch; not saved/restored on subroutine call
+|			Routines which return results return them in
+|			these registers.
+|	a2,a3,a5,d2-d6	Available for use; must be saved/restored on
+|			subroutine call.
+|	a4		Used by console I/O routines
+|	a6		Subroutine linkage to console I/O routines
+|	a7		Stack pointer
+|	d7		Misc. console I/O routine flags; see below for values
+| In general, subroutines return an error indication by setting the carry
+| flag
+|
+
+| Equated Symbols
+|
+|
+| Entry points to boot ROM routines
+
+rd	=	0x6E0		| read char. from console & return in d0
+msg	=	0x820		| display .asciz string (addr. in a0)
+type	=	0x83A		| display character in d0 on console
+
+
+| D7 flags - set and used by console I/O routines
+
+D7DISK	=	4		| 1 for disk 1
+D7VIDE	=	5		| 1 for video out
+D7KBD	=	7		| 1 for AI keyboard
+
+
+| ASCII character definitions
+
+CR	=	015		| carriage return
+KILL	=	025		| kill line - CTRL-U
+ERASE	=	0177		| delete char - DEL
+
+
+| Physical memory locations and sizes
+
+SYSMEM	=	0xE0000		| base of RAM
+PAGSIZ	=	0x400		| size of one memory page
+
+
+| Misc. constants
+
+CBIT	=	0x1		| carry bit in sr
+NAMSIZ	=	128		| chars in a file name
+
+| Global data
+
+
+	.text
+
+| Note: because of the utter stupidity of the a68 assembler, which
+| is completely unable to calculate offsets across segment boundaries,
+| all symbols in this program must be defined relative to the same
+| (text) segment.
+
+fname:	.=.+NAMSIZ		| file being booted
+
+
+| Messages and stuff
+
+prompt:
+	.byte	CR,LF
+	.asciz	"@"
+	.even			| doesn't work - must word-align manually
+
+tterase:
+	.byte	BS,SP,BS,0
+	.even			| doesn't work - must word-align manually
+
+
+| Start of Code
+
+
+| Find top of memory, and copy program there
+
+
+Stack:				| Stack below code
+BootS:				| Entry point
+	movl	#SYSMEM,a0	| start of first memory board
+10$:
+	addl	#0x20000,a0	| bump to start of next board
+	movw	#1234,a0@	| see if there's anything there
+	cmpw	#1234,a0@	| yes?
+	jeq	10$		| if so, try next board
+	subl	#PAGSIZ,a0	| found top. Avoid top page due to dk bug
+	lea	pc@(BootS-.-2),a1 | addr. of start of program
+	lea	pc@(end-.-2),a2 | addr. of end of program
+20$:
+	movw	a2@-,a0@-	| block-move program to top of memory
+	cmpl	a2,a1		| done?
+	jls	20$		| no, loop
+
+	lea	pc@(Restart-.-2),a2 | now get set to jump to new code copy
+	subl	a1,a2		| a2 will be address of Restart point in copy
+	addl	a0,a2		| ie. Restart - Boot + New Copy Base
+	jmp	a2@		| go there, abandon old copy
+
+
+| Program Restart Point
+| Control enters here after copy is complete, and after boot error
+
+Restart:
+	lea	pc@(Stack-.-2),a7 | get a stack
+	lea	pc@(prompt-.-2),a0 | display prompt string on...
+	lea	pc@(6),a6	| ...system console, using...
+	jmp	msg		| ...ROM output routine
+
+	lea	pc@(fname-.-2),a2 | go read in filename
+	movw	#NAMSIZ,d2	| (up to NAMSIZ characters)
+	jbsr	getstr		| into fname
+	jcs	Restart		| C-bit means error (KILL typed)
+
+	jbsr	namei		| convert filename to inode number
+	jcs	Restart		| C-bit means error (FNF or disk error)
+
+	jbsr	loadi		| load in the file with that inode number
+	jcs	Restart		| C ==> error (bad file type or disk error)
+
+	jbsr	mapper		| turn on mapping
+
+	jmp	a0@		| jump to start addr. of program
+
+
+| String utility routines
+
+
+| Read a string from the system console, with erase/kill processing.
+| Arguments:
+|	a2	Address of buffer
+|	d2	Buffer size in bytes
+| Returns:
+|	a0	Address of start of null-terminated string
+| 	C-bit	Set indicates KILL typed
+
+getstr:
+	moveml	#0x2010,sp@-	| save regs. a3 and d2
+	movl	a2,a3		| a3 is ptr. to next character position
+	subql	#1,d2		| leave space at end of string for null
+10$:
+	lea	pc@(6),a6	| read next character...
+	jmp	rd		| ...from system console
+
+	cmpb	#CR,d0		| line terminator
+	jne	20$		| no, branch
+	jbsr	crlf		| yep; echo crlf
+	clrb	a3@+		| add null terminator to string
+	jra	100$		| return (C-bit cleared by clrb instr.)
+20$:
+	cmpb	#KILL,d0	| kill line?
+	jne	30$		| no, branch
+	jbsr	crlf		| echo crlf
+	orw	#CBIT,sr	| set error bit to show KILL types
+	jra	100$		| return
+30$:
+	cmpb	#ERASE,d0	| erase char. typed?
+	jne	40$		| no, branch
+	cmpl	a3,a2		| yes; already at start of string?
+	jeq	10$		| yes; ignore the DEL
+	addql	#1,d2		| back out last character typed
+	subql	#1,a3
+	lea	pc@(tterase-.-2),a0 | erase char from screen
+	lea	pc@(6),a6
+	jmp	msg
+	jra	10$		| get next char
+40$:
+	tstl	d2		| end of string?
+	jeq	10$		| yes, just throw this char. away
+	movb	d0,a3@+		| stash it away
+	subql	#1,d2		| account for it
+	jra	10$		| go get next one
+100$:
+	moveml	sp@+,#0x0804	| restore regs. a3 and d2
+	rts
+
+
+| Echo a carriage return/line feed on the console
+
+crlf:
+	movb	#CR,d0
+	lea	pc@(6),a6
+	jmp	type
+	movb	#LF,d0
+	lea	pc@(6),a6
+	jmp	type
+	rts
+
+| Test scaffolding
+
+| Temp. nami.   Just displays current base addr. of program & returns
+
+phexl	=	0xC8A		| print hex longword
+tmpmsg:	.asciz	"Running at base address  "
+	.even			| Note: this piece of shit assembler
+				| doesn't do the right thing with .even's
+				| anyway, so you have to word align things
+				| yourself.  But there would be one here if
+				| they did any good, so...
+
+nami:
+	lea	pc@(tmpmsg-.-2),a0
+	lea	pc@(6),a6
+	jmp	msg
+	lea	pc@(BootS-.-2),a0
+	movl	a0,d0
+	lea	pc@(6),a6
+	jmp	phexl
+	jsr	crlf
+	rts
+
+| Temp. loadi, mapper.  Just return to ROM boot.
+
+BootAdr	=	0x400
+
+loadi:
+mapper:
+	jmp	BootAdr
+end:
